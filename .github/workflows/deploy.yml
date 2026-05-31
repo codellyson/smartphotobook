@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 env:
-  CF_ACCOUNT_ID: a492d60371140dc0c1860389e31387d1
+  CLOUDFLARE_ACCOUNT_ID: a492d60371140dc0c1860389e31387d1
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
 jobs:
   changes:
@@ -49,11 +50,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @smartphotobook/editor build
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy apps/editor/dist --project-name=smartphotobook-editor --branch=main --commit-dirty=true
+      - run: npx wrangler@4 pages deploy apps/editor/dist --project-name=smartphotobook-editor --branch=main --commit-dirty=true
 
   marketing:
     needs: changes
@@ -70,16 +67,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @smartphotobook/marketing build
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy apps/marketing/dist --project-name=smartphotobook-marketing --branch=main --commit-dirty=true
+      - run: npx wrangler@4 pages deploy apps/marketing/dist --project-name=smartphotobook-marketing --branch=main --commit-dirty=true
 
   worker:
     needs: changes
     if: needs.changes.outputs.worker == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/proofing
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -90,9 +86,5 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ env.CF_ACCOUNT_ID }}
-          workingDirectory: apps/proofing
-          command: deploy --env production
+        working-directory: .
+      - run: npx wrangler@4 deploy --env production
