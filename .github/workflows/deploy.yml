@@ -1,0 +1,98 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CF_ACCOUNT_ID: a492d60371140dc0c1860389e31387d1
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      editor: ${{ steps.filter.outputs.editor }}
+      marketing: ${{ steps.filter.outputs.marketing }}
+      worker: ${{ steps.filter.outputs.worker }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            editor:
+              - 'apps/editor/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/deploy.yml'
+            marketing:
+              - 'apps/marketing/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/deploy.yml'
+            worker:
+              - 'apps/proofing/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/deploy.yml'
+
+  editor:
+    needs: changes
+    if: needs.changes.outputs.editor == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @smartphotobook/editor build
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT_ID }}
+          command: pages deploy apps/editor/dist --project-name=smartphotobook-editor --branch=main --commit-dirty=true
+
+  marketing:
+    needs: changes
+    if: needs.changes.outputs.marketing == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @smartphotobook/marketing build
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT_ID }}
+          command: pages deploy apps/marketing/dist --project-name=smartphotobook-marketing --branch=main --commit-dirty=true
+
+  worker:
+    needs: changes
+    if: needs.changes.outputs.worker == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT_ID }}
+          workingDirectory: apps/proofing
+          command: deploy --env production
