@@ -1,0 +1,216 @@
+---
+import Base from "../layouts/Base.astro";
+
+const appUrl = import.meta.env.PUBLIC_APP_URL || "https://app.smartphotobook.kreativekorna.com";
+---
+
+<Base
+  title="SmartPhotobook — a local-first photobook designer for anyone"
+  description="Lay out your photobook on a real spread canvas. Drag, crop, frame, and export a press-ready PDF. Runs on your machine; your photos never have to leave it."
+>
+  <main class="landing">
+    <section class="hero">
+      <p class="eyebrow">Photobook design, local-first</p>
+      <h1>A simple app for arranging photos into a photobook.</h1>
+      <p class="lede">
+        Drag your photos onto real two-page spreads. Crop in place, frame the
+        heroes, slice one image across a whole spread. When you're happy,
+        export a PDF and send it to your printer. That's the whole product.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href={appUrl}>Open SmartPhotobook</a>
+        <a class="btn" href="#why">Why local-first</a>
+      </div>
+    </section>
+
+    <section class="features">
+      <article>
+        <h2>Real spread canvas</h2>
+        <p>
+          Two-page spreads with snappable grid templates. Drag photos into
+          frames, swap them around, fill the page or float a single image.
+        </p>
+      </article>
+      <article>
+        <h2>Crop, dice, reframe</h2>
+        <p>
+          Pan and zoom inside any frame. Slice one image across the whole
+          spread. Apply a colored border to every photo with one click.
+        </p>
+      </article>
+      <article>
+        <h2>Press-ready export</h2>
+        <p>
+          Export a PDF at 96, 150, or 300 DPI with bleed and crop marks. Hand
+          it to your favorite print lab — no proprietary uploader required.
+        </p>
+      </article>
+    </section>
+
+    <section id="why" class="why">
+      <h2>Why local-first</h2>
+      <div class="why-cols">
+        <article>
+          <h3>Your photos stay on your machine</h3>
+          <p>
+            The editor runs in your browser or as a real desktop app. Originals
+            never leave your disk. No cloud upload required for any part of
+            the design workflow.
+          </p>
+        </article>
+        <article>
+          <h3>No account to use it</h3>
+          <p>
+            Open the app, start arranging. The first time you want to preview
+            a photobook with someone, you can mint a link — but that's
+            optional, not the product.
+          </p>
+        </article>
+        <article>
+          <h3>It just makes a PDF</h3>
+          <p>
+            One file, your file, ready for any printer. Order from Mixbook,
+            Bay Photo, the local print shop, or just keep it for yourself.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>How it works</h2>
+      <ol>
+        <li>
+          <span class="step">1</span>
+          <div>
+            <h3>Drop photos in</h3>
+            <p>
+              Import from your library. They sit in a tray on the left, ready
+              to drag into any frame on the spread.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="step">2</span>
+          <div>
+            <h3>Arrange spreads</h3>
+            <p>
+              Pick a template per spread. Drag photos into frames. Crop, zoom,
+              add a hero image floating over a background, drop in a title.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="step">3</span>
+          <div>
+            <h3>Export &amp; print</h3>
+            <p>
+              Hit Export. You get a PDF with crop marks and bleed at the DPI
+              you set. Send it to your printer of choice.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <footer class="foot">
+      <p>SmartPhotobook · A local-first photobook designer.</p>
+    </footer>
+  </main>
+</Base>
+
+<style>
+  .landing { max-width: 920px; margin: 0 auto; padding: 96px 32px 80px; }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+  }
+
+  h1 {
+    font: 600 56px/1.05 "Cormorant Garamond", "Times New Roman", serif;
+    letter-spacing: -.01em;
+    margin: 0 0 22px;
+  }
+
+  .lede {
+    max-width: 640px;
+    font-size: 18px;
+    color: var(--ink-dim);
+    margin: 0 0 36px;
+  }
+
+  .cta { display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 22px;
+    border-radius: 10px;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid rgba(255,255,255,.18);
+    color: inherit;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: rgba(255,255,255,.06); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: #1a1611;
+  }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #fff); }
+
+  .features {
+    margin-top: 96px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 32px;
+  }
+  .features h2 { font: 600 22px/1.2 "Cormorant Garamond", serif; margin: 0 0 10px; }
+  .features p { color: var(--ink-dim); margin: 0; }
+
+  .why { margin-top: 120px; }
+  .why > h2 {
+    font: 600 32px/1.1 "Cormorant Garamond", serif;
+    margin: 0 0 28px;
+  }
+  .why-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 28px;
+  }
+  .why-cols h3 { font: 600 18px/1.2 inherit; margin: 0 0 8px; }
+  .why-cols p { margin: 0; color: var(--ink-dim); }
+
+  .how { margin-top: 120px; }
+  .how > h2 {
+    font: 600 32px/1.1 "Cormorant Garamond", serif;
+    margin: 0 0 32px;
+  }
+  .how ol { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 28px; }
+  .how li { display: grid; grid-template-columns: 44px 1fr; gap: 18px; align-items: flex-start; }
+  .how .step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.18);
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+  .how h3 { font: 600 18px/1.2 inherit; margin: 0 0 6px; }
+  .how p { color: var(--ink-dim); margin: 0; }
+
+  .foot {
+    margin-top: 120px;
+    padding-top: 28px;
+    border-top: 1px solid rgba(255,255,255,.08);
+    color: rgba(255,255,255,.45);
+    font-size: 13px;
+  }
+</style>

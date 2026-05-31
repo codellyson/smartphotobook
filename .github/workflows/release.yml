@@ -1,0 +1,62 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust (with macOS universal targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/editor/src-tauri -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/editor
+          tagName: ${{ github.ref_name }}
+          releaseName: SmartPhotobook ${{ github.ref_name }}
+          releaseBody: |
+            Download the right installer for your platform below.
+
+            - **macOS**: `.dmg` (universal — Apple Silicon + Intel)
+            - **Windows**: `.msi` or `.exe` (NSIS)
+
+            Unsigned builds: on first launch macOS will warn ("can't be opened"). Right-click the app → Open → Open. Windows SmartScreen may also warn — click "More info" → "Run anyway".
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

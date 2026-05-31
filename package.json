@@ -1,0 +1,16 @@
+{
+  "name": "smartphotobook",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @smartphotobook/editor dev",
+    "dev:proofing": "pnpm --filter @smartphotobook/proofing dev",
+    "dev:marketing": "pnpm --filter @smartphotobook/marketing dev",
+    "build": "pnpm --filter @smartphotobook/editor build",
+    "build:proofing": "pnpm --filter @smartphotobook/proofing build",
+    "build:marketing": "pnpm --filter @smartphotobook/marketing build",
+    "build:all": "pnpm -r --filter @smartphotobook/* build",
+    "tauri:dev": "pnpm --filter @smartphotobook/editor tauri:dev",
+    "tauri:build": "pnpm --filter @smartphotobook/editor tauri:build"
+  }
+}

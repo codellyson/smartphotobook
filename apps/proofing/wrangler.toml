@@ -1,0 +1,45 @@
+name = "smartphotobook-proofing"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ---------- default (local dev) ----------
+
+[[d1_databases]]
+binding = "DB"
+database_name = "smartphotobook-proofing"
+# Filled in after `wrangler d1 create smartphotobook-proofing`.
+database_id = "28890257-a76c-4d72-9839-dfd05ff570f3"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "smartphotobook-spreads"
+
+[vars]
+PUBLIC_BASE_URL = "http://localhost:8787"
+PUBLIC_BUCKET_BASE = "http://localhost:8787/r2"
+TRUSTED_ORIGINS = "http://localhost:5173,http://localhost:1420"
+
+# ---------- production: api.smartphotobook.kreativekorna.com ----------
+
+[env.production]
+name = "smartphotobook-proofing"
+routes = [
+  { pattern = "api.smartphotobook.kreativekorna.com", custom_domain = true }
+]
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "smartphotobook-proofing"
+database_id = "28890257-a76c-4d72-9839-dfd05ff570f3"
+migrations_dir = "migrations"
+
+[[env.production.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "smartphotobook-spreads"
+
+[env.production.vars]
+PUBLIC_BASE_URL = "https://api.smartphotobook.kreativekorna.com"
+PUBLIC_BUCKET_BASE = "https://api.smartphotobook.kreativekorna.com/r2"
+TRUSTED_ORIGINS = "https://app.smartphotobook.kreativekorna.com,https://smartphotobook.kreativekorna.com"
