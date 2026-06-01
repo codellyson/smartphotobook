@@ -36,6 +36,7 @@ export const ICONS: Record<string, string[]> = {
   frame:    ["M3 3h18v18H3zM7 7h10v10H7z"],
   expand:   ["M9 3H5a2 2 0 00-2 2v4M15 3h4a2 2 0 012 2v4M21 15v4a2 2 0 01-2 2h-4M3 15v4a2 2 0 002 2h4"],
   paint:    ["M19 3H5a2 2 0 00-2 2v6h18V5a2 2 0 00-2-2zM3 11v3a2 2 0 002 2h5v3a2 2 0 002 2 2 2 0 002-2v-5H3z"],
+  book:     ["M4 5h7v14H4zM13 5h7v14h-7z"],
 };
 
 export function Icon({ n, style }: { n: string; style?: React.CSSProperties }) {

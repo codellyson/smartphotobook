@@ -112,15 +112,14 @@ function TopBar({
         className: "brand",
         onClick: onBackToProjects,
         title: "Back to all albums",
-        style: { background: "transparent", border: 0, cursor: "pointer", color: "inherit" },
+        "aria-label": "Back to all albums",
       },
-      React.createElement("div", { className: "mark" }, "S"),
-      React.createElement("div", { className: "name" }, React.createElement("b", null, "Smart"), "Albums"),
+      React.createElement(Icon, { n: "book" }),
     ),
     React.createElement(
       "div",
       { className: "proj-meta" },
-      React.createElement("div", { className: "t" }, meta.couple || projectName || "Untitled album"),
+      React.createElement("div", { className: "t" }, projectName || "Untitled album"),
       React.createElement(
         "div",
         { className: "s" },
@@ -132,7 +131,7 @@ function TopBar({
       { className: "viewswitch" },
       tab("designer", "Designer", "designer"),
       tab("library", "Library", "library"),
-      tab("proof", "Proofing", "proof"),
+      tab("proof", "Preview", "proof"),
       tab("settings", "Settings", "sliders"),
     ),
     React.createElement(
@@ -145,7 +144,6 @@ function TopBar({
         React.createElement(Icon, { n: "share" }),
         sharing ? "Sharing…" : "Send preview link",
       ),
-      React.createElement("div", { className: "avatar", "aria-hidden": "true" }),
     ),
   );
 }
@@ -773,6 +771,19 @@ export function App({
     showToast("New spread added");
   };
 
+  const removeSpread = (i: number) => {
+    if (spreads.length <= 1) {
+      showToast("Can't remove the last spread");
+      return;
+    }
+    setSpreads((prev) => prev.filter((_, idx) => idx !== i));
+    setActive((cur) => (cur < i ? cur : cur === i ? Math.max(0, i - 1) : cur - 1));
+    setSelected(null);
+    setSelOverlay(null);
+    setAllSel(false);
+    showToast("Spread removed");
+  };
+
   const reorder = (from: number, dropIdx: number) => {
     setSpreads((prev) => {
       const arr = [...prev];
@@ -803,7 +814,7 @@ export function App({
         paddingPx: 0,
       });
       const defaultName =
-        (meta.couple || projectName || "album").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") +
+        (projectName || "album").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") +
         ".pdf";
       const result = await Platform.exportAlbum({
         jpegs: album.jpegs,
@@ -840,7 +851,7 @@ export function App({
         paddingPx: 0,
         jpegQuality: 0.85,
       });
-      const name = [meta.couple, meta.title].filter(Boolean).join(" — ") || projectName;
+      const name = meta.title || projectName;
       const result = await createShare({
         name,
         meta: {
@@ -968,7 +979,7 @@ export function App({
                     null,
                     active === 0 ? "Cover" : `${active * 2}–${active * 2 + 1}`,
                   ),
-                  ` · ${spreads.length} spreads`,
+                  ` · ${spreads.length} ${spreads.length === 1 ? "spread" : "spreads"}`,
                 ),
                 React.createElement(
                   "div",
@@ -1050,6 +1061,7 @@ export function App({
                   // run on next tick so setActive has settled before duplicate reads `active`
                   setTimeout(() => handlers.onDuplicateActive?.(), 0);
                 },
+                onRemove: removeSpread,
               }),
             ),
             React.createElement(TemplatePanel, {
@@ -1077,6 +1089,7 @@ export function App({
             sel,
             toggleSel,
             meta,
+            onImport: importPhotos,
           })
         : null,
       view === "proof"

@@ -1,5 +1,4 @@
 
-import React from "react";
 import type { ProjectMeta } from "@/lib/data";
 
 type SettingsProps = {
@@ -34,47 +33,40 @@ export function Settings({ meta, spreadCount, onChange, onExport, exporting, isD
           <p className="settings-eyebrow">Album info</p>
           <h2>Settings</h2>
           <p className="settings-lede">
-            How this album shows up in your library, on the cover, and in client proofs.
+            How this album shows up in your library and on the cover.
           </p>
         </header>
 
         <section className="settings-section">
-          <h3>Couple &amp; event</h3>
+          <h3>Album details</h3>
           <div className="settings-row">
-            <label>
-              <span>Couple</span>
-              <input
-                value={meta.couple}
-                placeholder="e.g. Sarah & James"
-                onChange={(e) => update("couple", e.target.value)}
-              />
-            </label>
             <label>
               <span>Album title</span>
               <input
                 value={meta.title}
-                placeholder="e.g. Summer Wedding"
+                placeholder="e.g. Iceland 2026"
                 onChange={(e) => update("title", e.target.value)}
+              />
+            </label>
+            <label>
+              <span>Date</span>
+              <input
+                value={meta.date}
+                placeholder="e.g. June 2026"
+                onChange={(e) => update("date", e.target.value)}
               />
             </label>
           </div>
           <div className="settings-row">
             <label>
-              <span>Date</span>
-              <input
-                value={meta.date}
-                placeholder="e.g. June 14, 2025"
-                onChange={(e) => update("date", e.target.value)}
-              />
-            </label>
-            <label>
-              <span>Venue</span>
+              <span>Location</span>
               <input
                 value={meta.venue}
-                placeholder="e.g. Hawthorne Estate"
+                placeholder="e.g. Reykjavik"
                 onChange={(e) => update("venue", e.target.value)}
               />
             </label>
+            <div />
           </div>
         </section>
 

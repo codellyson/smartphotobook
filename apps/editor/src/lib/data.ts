@@ -101,7 +101,6 @@ export type Spread = {
 };
 
 export type ProjectMeta = {
-  couple: string;
   title: string;
   date: string;
   venue: string;
@@ -142,7 +141,6 @@ export const initialSpreads: Spread[] = [
 ];
 
 export const defaultMeta: ProjectMeta = {
-  couple: "",
   title: "",
   date: "",
   venue: "",

@@ -64,11 +64,11 @@ export function Proofing({ spreads, photosById, favSpreads, onToggleFavSpread, o
       React.createElement(
         "div",
         { className: "who" },
-        meta.couple || "Untitled album",
+        meta.title || "Untitled album",
         React.createElement(
           "span",
           null,
-          [meta.title, "Proof for client review"].filter(Boolean).join(" · "),
+          [meta.date, "Preview"].filter(Boolean).join(" · "),
         ),
       ),
       React.createElement(

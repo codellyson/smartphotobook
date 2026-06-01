@@ -509,7 +509,7 @@ export function Tray({ photos, usedIds, query, setQuery, sel, toggleSel, onImpor
       { className: "search" },
       React.createElement(Icon, { n: "search" }),
       React.createElement("input", {
-        placeholder: "Search moments…",
+        placeholder: "Search photos…",
         value: query,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
       }),
@@ -549,9 +549,10 @@ type FilmstripProps = {
   onAdd: () => void;
   onReorder: (from: number, dropIdx: number) => void;
   onDuplicate?: (i: number) => void;
+  onRemove?: (i: number) => void;
 };
 
-export function Filmstrip({ spreads, active, photosById, onSelect, onAdd, onReorder, onDuplicate }: FilmstripProps) {
+export function Filmstrip({ spreads, active, photosById, onSelect, onAdd, onReorder, onDuplicate, onRemove }: FilmstripProps) {
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const dragIdx = useRef<number | null>(null);
   return React.createElement(
@@ -694,13 +695,32 @@ export function Filmstrip({ spreads, active, photosById, onSelect, onAdd, onReor
                 React.createElement(Icon, { n: "plus" }),
               )
             : null,
+          onRemove && spreads.length > 1
+            ? React.createElement(
+                "button",
+                {
+                  className: "fs-rm",
+                  title: "Remove spread",
+                  onClick: (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    onRemove(i);
+                  },
+                },
+                React.createElement(Icon, { n: "trash" }),
+              )
+            : null,
         ),
       );
     }),
     React.createElement(
-      "button",
-      { className: "fs-add", onClick: onAdd, title: "Add spread" },
-      React.createElement(Icon, { n: "plus" }),
+      "div",
+      { className: "fs-add-wrap" },
+      React.createElement(
+        "button",
+        { className: "fs-add", onClick: onAdd, title: "Add spread" },
+        React.createElement(Icon, { n: "plus" }),
+      ),
+      React.createElement("div", { className: "fs-add-lbl-spacer" }),
     ),
   );
 }
@@ -800,17 +820,20 @@ export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx,
       { className: "tpl-grid", key: "tpl" },
       templates.map((t) =>
         React.createElement(
-          "button",
-          {
-            key: t.id,
-            className: "tpl" + (t.id === spread.templateId ? " on" : ""),
-            onClick: () => onPick(t.id),
-            title: t.name,
-          },
+          "div",
+          { key: t.id, className: "tpl-cell" },
           React.createElement(
-            "div",
-            { className: "mg" },
-            t.cells.map((c, i) => React.createElement("span", { key: i, style: gridPos(c) })),
+            "button",
+            {
+              className: "tpl" + (t.id === spread.templateId ? " on" : ""),
+              onClick: () => onPick(t.id),
+              title: t.name,
+            },
+            React.createElement(
+              "div",
+              { className: "mg" },
+              t.cells.map((c, i) => React.createElement("span", { key: i, style: gridPos(c) })),
+            ),
           ),
           React.createElement("div", { className: "nm" }, t.name),
         ),
@@ -868,6 +891,18 @@ export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx,
           )
         : null,
     ),
+    handlers.onAddTextOverlay
+      ? React.createElement(
+          "button",
+          {
+            className: "btn wide",
+            key: "add-text",
+            onClick: () => handlers.onAddTextOverlay?.(),
+          },
+          React.createElement(Icon, { n: "plus" }),
+          "Add text",
+        )
+      : null,
     React.createElement(
       "div",
       { className: "section-label", key: "bd-l" },
@@ -1100,18 +1135,6 @@ export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx,
         React.createElement(Icon, { n: "layers" }),
         "Drag a photo onto the page edge to float it. Select a frame to add a colored border.",
       ),
-      handlers.onAddTextOverlay
-        ? React.createElement(
-            "button",
-            {
-              className: "btn wide",
-              key: "add-text",
-              onClick: () => handlers.onAddTextOverlay?.(),
-            },
-            React.createElement(Icon, { n: "plus" }),
-            "Add text",
-          )
-        : null,
     );
   }
 
