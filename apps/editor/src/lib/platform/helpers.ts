@@ -25,6 +25,8 @@ export function mkPhoto(args: {
     source: args.source,
     src: args.src,
     imported: true,
+    widthPx: args.w,
+    heightPx: args.h,
   };
 }
 

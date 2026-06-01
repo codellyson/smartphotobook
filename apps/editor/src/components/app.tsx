@@ -9,6 +9,7 @@ import { Library } from "./library";
 import { Proofing } from "./proofing";
 import { Settings } from "./settings";
 import { Icon, useToast } from "./icons";
+import { buildBookFromPhotos } from "@/lib/auto-layout";
 import { renderAlbum, trimSizeToMm } from "@/lib/render";
 import {
   createShare,
@@ -76,6 +77,7 @@ function TopBar({
   view,
   setView,
   onAutofill,
+  onBuildBook,
   projectName,
   meta,
   onBackToProjects,
@@ -85,6 +87,7 @@ function TopBar({
   view: View;
   setView: (v: View) => void;
   onAutofill: () => void;
+  onBuildBook: () => void;
   projectName: string;
   meta: ProjectMeta;
   onBackToProjects: () => void;
@@ -137,7 +140,18 @@ function TopBar({
     React.createElement(
       "div",
       { className: "right" },
-      React.createElement("button", { className: "btn", onClick: onAutofill }, React.createElement(Icon, { n: "wand" }), "Auto-fill"),
+      React.createElement(
+        "button",
+        { className: "btn", onClick: onBuildBook, title: "Build a fresh layout from your photos" },
+        React.createElement(Icon, { n: "sparkles" }),
+        "Build book",
+      ),
+      React.createElement(
+        "button",
+        { className: "btn", onClick: onAutofill, title: "Fill empty frames with unplaced photos" },
+        React.createElement(Icon, { n: "wand" }),
+        "Auto-fill",
+      ),
       React.createElement(
         "button",
         { className: "btn primary", onClick: onShare, disabled: sharing },
@@ -246,7 +260,30 @@ export function App({
       }
   >(null);
   const [zoom, setZoom] = useState(1);
+  const [printMarks, setPrintMarks] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll the active spread into view in the multi-spread canvas whenever
+  // it changes (e.g. via filmstrip or Spread Grid click).
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const slot = stage.querySelector(`.spread-slot:nth-child(${active + 1})`) as HTMLElement | null;
+    if (slot) slot.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [active]);
+
+  // Print marks geometry — percentage insets computed from meta.size.
+  const marks = useMemo(() => {
+    const { wMm, hMm } = trimSizeToMm(meta.size);
+    const spreadWMm = wMm * 2;
+    const SAFE_MM = 6;     // typical safe-area inset for photobooks
+    const GUTTER_MM = 10;  // gutter danger-zone half-width on each side of spine
+    return {
+      safeInsetX: (SAFE_MM / spreadWMm) * 100,
+      safeInsetY: (SAFE_MM / hMm) * 100,
+      gutterHalfWidth: (GUTTER_MM / spreadWMm) * 100,
+    };
+  }, [meta.size]);
 
   useEffect(() => {
     const r = document.documentElement.style;
@@ -545,6 +582,18 @@ export function App({
       mutateCells((cells) => {
         cells[idx] = Object.assign({}, cells[idx], { frame: frame.w ? frame : undefined });
       }),
+    onSetCellTone: (
+      idx: number,
+      patch: Partial<{ brightness: number; contrast: number; bw: boolean }>,
+    ) =>
+      mutateCells((cells) => {
+        const cur = cells[idx];
+        cells[idx] = Object.assign({}, cur, {
+          brightness: patch.brightness ?? cur.brightness,
+          contrast: patch.contrast ?? cur.contrast,
+          bw: patch.bw !== undefined ? patch.bw : cur.bw,
+        });
+      }, `tone:${active}:${idx}`),
     onSetAllFrames: (frame: Frame) =>
       setSpreads((prev) =>
         prev.map((sp, i) => {
@@ -742,6 +791,27 @@ export function App({
       }),
     );
     setSelected(null);
+  };
+
+  const buildBook = () => {
+    if (photos.length === 0) {
+      showToast("Import photos first, then I can build a book from them");
+      return;
+    }
+    const hasPlaced = spreads.some((sp) => sp.cells.some((c) => c.photoId));
+    if (hasPlaced) {
+      const ok = window.confirm(
+        `Build a fresh book from your ${photos.length} photos?\n\nThis replaces all current spreads. You can undo with ⌘Z afterwards.`,
+      );
+      if (!ok) return;
+    }
+    const next = buildBookFromPhotos(photos);
+    setSpreads(next, "build-book");
+    setActive(0);
+    setSelected(null);
+    setSelOverlay(null);
+    setAllSel(false);
+    showToast(`Built a book — ${next.length} spread${next.length === 1 ? "" : "s"}`);
   };
 
   const autofill = () => {
@@ -945,6 +1015,7 @@ export function App({
         view,
         setView,
         onAutofill: autofill,
+        onBuildBook: buildBook,
         projectName,
         meta,
         onBackToProjects,
@@ -973,45 +1044,61 @@ export function App({
                 React.createElement(
                   "div",
                   { className: "pageno" },
-                  "Spread ",
                   React.createElement(
                     "b",
                     null,
-                    active === 0 ? "Cover" : `${active * 2}–${active * 2 + 1}`,
+                    `${spreads.length} ${spreads.length === 1 ? "spread" : "spreads"}`,
                   ),
-                  ` · ${spreads.length} ${spreads.length === 1 ? "spread" : "spreads"}`,
+                  ` (${spreads.length * 2} pages), `,
+                  React.createElement("b", null, `${usedIds.size}/${photos.length}`),
+                  " images used",
                 ),
                 React.createElement(
                   "div",
-                  { className: "zoomctl" },
+                  { className: "canvas-top-right" },
                   React.createElement(
                     "button",
                     {
-                      className: "zoom-btn",
-                      onClick: () => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(2))),
-                      "aria-label": "Zoom out",
-                      title: "Zoom out (⌘−)",
+                      className: "canvas-tool" + (printMarks ? " on" : ""),
+                      onClick: () => setPrintMarks((v) => !v),
+                      title: "Toggle print marks: safe area + gutter danger zone",
+                      "aria-pressed": printMarks,
                     },
-                    "−",
+                    React.createElement(Icon, { n: "crop" }),
+                    "Print marks",
                   ),
                   React.createElement(
-                    "button",
-                    {
-                      className: "zoom-level",
-                      onClick: () => setZoom(1),
-                      title: "Reset zoom (⌘0)",
-                    },
-                    Math.round(zoom * 100) + "%",
-                  ),
-                  React.createElement(
-                    "button",
-                    {
-                      className: "zoom-btn",
-                      onClick: () => setZoom((z) => Math.min(3, +(z + 0.1).toFixed(2))),
-                      "aria-label": "Zoom in",
-                      title: "Zoom in (⌘+)",
-                    },
-                    "+",
+                    "div",
+                    { className: "zoomctl" },
+                    React.createElement(
+                      "button",
+                      {
+                        className: "zoom-btn",
+                        onClick: () => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(2))),
+                        "aria-label": "Zoom out",
+                        title: "Zoom out (⌘−)",
+                      },
+                      "−",
+                    ),
+                    React.createElement(
+                      "button",
+                      {
+                        className: "zoom-level",
+                        onClick: () => setZoom(1),
+                        title: "Reset zoom (⌘0)",
+                      },
+                      Math.round(zoom * 100) + "%",
+                    ),
+                    React.createElement(
+                      "button",
+                      {
+                        className: "zoom-btn",
+                        onClick: () => setZoom((z) => Math.min(3, +(z + 0.1).toFixed(2))),
+                        "aria-label": "Zoom in",
+                        title: "Zoom in (⌘+)",
+                      },
+                      "+",
+                    ),
                   ),
                 ),
               ),
@@ -1019,30 +1106,77 @@ export function App({
                 "div",
                 {
                   ref: stageRef,
-                  className: "stage",
+                  className: "stage book-flow",
                   onClick: () => {
                     setSelected(null);
                     setSelOverlay(null);
                     setAllSel(false);
                   },
                 },
-                React.createElement(
-                  "div",
-                  {
-                    className: "spread-wrap",
-                    style: zoom !== 1 ? { transform: `scale(${zoom})`, transformOrigin: "center center" } : undefined,
-                    onClick: (e: React.MouseEvent) => e.stopPropagation(),
-                  },
-                  React.createElement(SpreadView, {
-                    spread: activeSpread,
-                    photosById,
-                    editable: true,
-                    selectedIdx: selected,
-                    selOverlay,
-                    allSel,
-                    handlers,
-                  }),
-                ),
+                spreads.map((sp, i) => {
+                  const isActive = i === active;
+                  return React.createElement(
+                    "div",
+                    {
+                      key: sp.id,
+                      className: "spread-slot" + (isActive ? " on" : ""),
+                      onClick: (e: React.MouseEvent) => {
+                        if (!isActive) {
+                          e.stopPropagation();
+                          setActive(i);
+                          setSelected(null);
+                          setSelOverlay(null);
+                          setAllSel(false);
+                        }
+                      },
+                    },
+                    React.createElement(
+                      "div",
+                      {
+                        className: "spread-wrap",
+                        style: zoom !== 1 ? { transform: `scale(${zoom})`, transformOrigin: "center center" } : undefined,
+                        onClick: (e: React.MouseEvent) => e.stopPropagation(),
+                      },
+                      React.createElement(SpreadView, {
+                        spread: sp,
+                        photosById,
+                        editable: isActive,
+                        selectedIdx: isActive ? selected : null,
+                        selOverlay: isActive ? selOverlay : null,
+                        allSel: isActive && allSel,
+                        handlers,
+                        isCover: i === 0,
+                      }),
+                      isActive && printMarks
+                        ? React.createElement(
+                            "div",
+                            { className: "print-marks", "aria-hidden": "true" },
+                            React.createElement("div", {
+                              className: "pm-safe",
+                              style: {
+                                top: `${marks.safeInsetY}%`,
+                                bottom: `${marks.safeInsetY}%`,
+                                left: `${marks.safeInsetX}%`,
+                                right: `${marks.safeInsetX}%`,
+                              },
+                            }),
+                            React.createElement("div", {
+                              className: "pm-gutter",
+                              style: {
+                                left: `${50 - marks.gutterHalfWidth}%`,
+                                right: `${50 - marks.gutterHalfWidth}%`,
+                              },
+                            }),
+                          )
+                        : null,
+                    ),
+                    React.createElement(
+                      "div",
+                      { className: "slot-lbl" },
+                      i === 0 ? "Cover" : `${i * 2}–${i * 2 + 1}`,
+                    ),
+                  );
+                }),
               ),
               React.createElement(Filmstrip, {
                 spreads,
@@ -1066,8 +1200,16 @@ export function App({
             ),
             React.createElement(TemplatePanel, {
               spread: activeSpread,
+              spreads,
               active,
               onPick: pickTemplate,
+              onSelectSpread: (i: number) => {
+                setActive(i);
+                setSelected(null);
+                setSelOverlay(null);
+                setAllSel(false);
+              },
+              photos,
               photosById,
               selectedIdx: selected,
               selOverlay,
@@ -1076,6 +1218,7 @@ export function App({
               defaultPad,
               handlers,
               pageSize: meta.size,
+              meta,
             }),
           )
         : null,

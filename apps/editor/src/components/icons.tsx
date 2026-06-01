@@ -37,6 +37,7 @@ export const ICONS: Record<string, string[]> = {
   expand:   ["M9 3H5a2 2 0 00-2 2v4M15 3h4a2 2 0 012 2v4M21 15v4a2 2 0 01-2 2h-4M3 15v4a2 2 0 002 2h4"],
   paint:    ["M19 3H5a2 2 0 00-2 2v6h18V5a2 2 0 00-2-2zM3 11v3a2 2 0 002 2h5v3a2 2 0 002 2 2 2 0 002-2v-5H3z"],
   book:     ["M4 5h7v14H4zM13 5h7v14h-7z"],
+  sparkles: ["M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z", "M19 14l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z", "M5.5 15.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z"],
 };
 
 export function Icon({ n, style }: { n: string; style?: React.CSSProperties }) {

@@ -21,6 +21,14 @@ export type Photo = {
   src: string;
   fav?: boolean;
   imported?: boolean;
+  /** EXIF DateTimeOriginal as a unix-ms timestamp, if available. Used by
+   *  auto-layout to sort chronologically. */
+  takenAt?: number;
+  /** Natural image dimensions in pixels. Captured during import via the
+   *  probe helper; used for DPI/quality calculations. May be missing on
+   *  photos persisted before this field was tracked. */
+  widthPx?: number;
+  heightPx?: number;
 };
 
 /** Infer a PhotoSource for a legacy photo persisted before this type existed. */
@@ -51,6 +59,11 @@ export type Cell = {
   ox: number;
   oy: number;
   frame?: Frame;
+  /** Per-frame tone adjustments. Brightness and contrast are integer
+   *  percentages (-50 to +50). bw: render the photo desaturated. */
+  brightness?: number;
+  contrast?: number;
+  bw?: boolean;
 };
 
 export type ImageOverlay = {

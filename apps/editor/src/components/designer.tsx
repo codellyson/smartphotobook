@@ -1,10 +1,12 @@
 
 import React, { useMemo, useRef, useState } from "react";
-import type { Cell as CellType, GridPos, Photo, Spread, Template, Frame, TextOverlay } from "@/lib/data";
+import type { Cell as CellType, GridPos, Photo, ProjectMeta, Spread, Template, Frame, TextOverlay } from "@/lib/data";
 import { templates, isTextOverlay } from "@/lib/data";
 import { Platform } from "@/lib/platform";
+import { cellPhysicalSize, effectivePPI, ppiBand } from "@/lib/cell-geometry";
+import { trimSizeToMm } from "@/lib/render";
 import { Icon } from "./icons";
-import { OverlayDropCatcher, OverlayLayer, OV_ASPECT, PAGE_COLORS, FRAME_COLORS, type OverlayHandlers } from "./overlays";
+import { OverlayDropCatcher, OverlayLayer, PAGE_COLORS, FRAME_COLORS, type OverlayHandlers } from "./overlays";
 
 export function clamp(v: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, v));
@@ -13,11 +15,18 @@ export function gridPos(p: GridPos): React.CSSProperties {
   return { gridColumn: `${p.c1} / ${p.c2}`, gridRow: `${p.r1} / ${p.r2}` };
 }
 export function imgStyle(cell: CellType): React.CSSProperties {
-  return {
+  const tone: string[] = [];
+  if (cell.brightness) tone.push(`brightness(${(1 + cell.brightness / 100).toFixed(3)})`);
+  if (cell.contrast) tone.push(`contrast(${(1 + cell.contrast / 100).toFixed(3)})`);
+  if (cell.bw) tone.push("grayscale(1)");
+  const style: React.CSSProperties = {
     objectPosition: `${cell.ox}% ${cell.oy}%`,
     transform: `scale(${cell.zoom})`,
     transformOrigin: "center",
   };
+  // Compose with the base --grade filter so tone adjustments stack on top.
+  if (tone.length) style.filter = `var(--grade) ${tone.join(" ")}`;
+  return style;
 }
 
 const DICE_PRESETS = [
@@ -77,6 +86,7 @@ export type DesignerHandlers = OverlayHandlers & {
   onSetBg: (color: string) => void;
   onSetCellFrame: (idx: number, frame: Frame) => void;
   onSetAllFrames: (frame: Frame) => void;
+  onSetCellTone?: (idx: number, patch: Partial<{ brightness: number; contrast: number; bw: boolean }>) => void;
   onSetPad: (px: number | null) => void;
   onSetOverlayFrame: (id: string, frame: Frame) => void;
   onDuplicateActive?: () => void;
@@ -158,6 +168,8 @@ type CellProps = {
   selected: boolean;
   allSelected: boolean;
   editable: boolean;
+  /** 1-based position among placed cells in this spread's reading order. */
+  placedIndex?: number;
   onSelect: DesignerHandlers["onSelect"];
   onDropContent: DesignerHandlers["onDropContent"];
   onStartDrag?: DesignerHandlers["onStartDrag"];
@@ -170,7 +182,7 @@ type CellProps = {
   onClearDice: DesignerHandlers["onClearDice"];
 };
 
-export function Cell({ cell, idx, photo, selected, allSelected, editable, onSelect, onDropContent, onStartDrag, onRemove, onRecenter, onZoom, onPan, onCrop, onDice }: CellProps) {
+export function Cell({ cell, idx, photo, selected, allSelected, editable, placedIndex, onSelect, onDropContent, onStartDrag, onRemove, onRecenter, onZoom, onPan, onCrop, onDice }: CellProps) {
   const [over, setOver] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const pan = useRef<{ x: number; y: number; ox: number; oy: number; w: number; h: number } | null>(null);
@@ -249,6 +261,9 @@ export function Cell({ cell, idx, photo, selected, allSelected, editable, onSele
           className: "cframe",
           style: { borderWidth: cell.frame.w, borderColor: cell.frame.color, borderStyle: "solid" },
         })
+      : null,
+    placedIndex
+      ? React.createElement("div", { className: "cell-num", "aria-hidden": "true" }, placedIndex)
       : null,
     editable
       ? React.createElement(
@@ -396,12 +411,25 @@ type SpreadViewProps = {
   handlers: DesignerHandlers;
   className?: string;
   style?: React.CSSProperties;
+  /** Cover spreads render as a single page (no gutter line). */
+  isCover?: boolean;
 };
 
-export function SpreadView({ spread, photosById, editable, selectedIdx, selOverlay, allSel, handlers, className, style }: SpreadViewProps) {
+export function SpreadView({ spread, photosById, editable, selectedIdx, selOverlay, allSel, handlers, className, style, isCover }: SpreadViewProps) {
   const spreadRef = useRef<HTMLDivElement | null>(null);
   const tpl = templates.find((t) => t.id === spread.templateId) as Template;
   const cells = spread.cells.map((c, i) => Object.assign({}, c, { _pos: tpl.cells[i] }));
+  // 1-based ordering of placed cells for the placement badge.
+  const placedOrder: Record<number, number> = {};
+  {
+    let n = 0;
+    spread.cells.forEach((c, i) => {
+      if (c.photoId) {
+        n++;
+        placedOrder[i] = n;
+      }
+    });
+  }
   let dice = spread.dice && photosById[spread.dice.photoId] ? spread.dice : null;
   if (!dice && spread.dicePhotoId && photosById[spread.dicePhotoId]) {
     dice = { photoId: spread.dicePhotoId, rows: 1, cols: 3 };
@@ -414,10 +442,10 @@ export function SpreadView({ spread, photosById, editable, selectedIdx, selOverl
   );
   return React.createElement(
     "div",
-    { className: "spread " + (className || ""), style: spreadStyle, ref: spreadRef },
+    { className: "spread " + (isCover ? "cover " : "") + (className || ""), style: spreadStyle, ref: spreadRef },
     React.createElement("div", { className: "page-half" }),
     React.createElement("div", { className: "page-half" }),
-    React.createElement("div", { className: "gutter" }),
+    isCover ? null : React.createElement("div", { className: "gutter" }),
     editable && handlers.onAddOverlay
       ? React.createElement(OverlayDropCatcher, { spreadRef, onAdd: handlers.onAddOverlay })
       : null,
@@ -435,6 +463,7 @@ export function SpreadView({ spread, photosById, editable, selectedIdx, selOverl
               selected: editable && selectedIdx === i,
               editable,
               allSelected: !!(editable && allSel && cell.photoId),
+              placedIndex: placedOrder[i],
               onSelect: handlers.onSelect,
               onDropContent: handlers.onDropContent,
               onStartDrag: handlers.onStartDrag,
@@ -559,7 +588,6 @@ export function Filmstrip({ spreads, active, photosById, onSelect, onAdd, onReor
     "div",
     { className: "filmstrip" },
     spreads.map((sp, i) => {
-      const tpl = templates.find((t) => t.id === sp.templateId) as Template;
       let dice = sp.dice && photosById[sp.dice.photoId] ? sp.dice : null;
       if (!dice && sp.dicePhotoId && photosById[sp.dicePhotoId]) {
         dice = { photoId: sp.dicePhotoId, rows: 1, cols: 3 };
@@ -598,84 +626,26 @@ export function Filmstrip({ spreads, active, photosById, onSelect, onAdd, onReor
         React.createElement(
           "div",
           { className: "mini", style: sp.pageColor ? { background: sp.pageColor } : undefined },
-          dice
-            ? React.createElement(
-                "div",
-                {
-                  className: "fs-dice",
-                  style: {
-                    gridTemplateColumns: `repeat(${dice.cols},1fr)`,
-                    gridTemplateRows: `repeat(${dice.rows},1fr)`,
-                    ["--dgap" as string]: "1.5px",
-                  } as React.CSSProperties,
-                },
-                (() => {
-                  const ts: Array<{ r: number; c: number }> = [];
-                  for (let r = 0; r < dice!.rows; r++) for (let c = 0; c < dice!.cols; c++) ts.push({ r, c });
-                  return ts;
-                })().map((t, k) =>
-                  React.createElement(
+          React.createElement(
+            "div",
+            { className: "fs-photos" },
+            dice
+              ? React.createElement(
+                  "div",
+                  { key: "dice", className: "fs-ph dice" },
+                  React.createElement("img", { src: photosById[dice.photoId].src, alt: "" }),
+                )
+              : sp.cells.map((c, ci) => {
+                  const photo = c.photoId ? photosById[c.photoId] : null;
+                  return React.createElement(
                     "div",
-                    { key: k, className: "dtile" },
-                    React.createElement("img", {
-                      src: photosById[dice!.photoId].src,
-                      style: diceTileImgStyle(t.r, t.c, dice!.rows, dice!.cols),
-                    }),
-                  ),
-                ),
-              )
-            : React.createElement(
-                "div",
-                { className: "fs-mini-grid" },
-                sp.cells.map((c, ci) =>
-                  React.createElement(
-                    "div",
-                    { key: ci, className: "c", style: gridPos(tpl.cells[ci]) },
-                    c.photoId && photosById[c.photoId]
-                      ? React.createElement("img", { src: photosById[c.photoId].src, style: imgStyle(c) })
+                    { key: ci, className: "fs-ph" + (photo ? "" : " empty") },
+                    photo
+                      ? React.createElement("img", { src: photo.src, alt: "" })
                       : null,
-                  ),
-                ),
-              ),
-          (sp.overlays || []).map((ov) => {
-            if (ov.kind === "text") {
-              return React.createElement(
-                "div",
-                {
-                  key: ov.id,
-                  className: "mini-ov mini-text",
-                  style: {
-                    left: ov.xPct + "%",
-                    top: ov.yPct + "%",
-                    width: ov.wPct + "%",
-                    transform: "translate(-50%,-50%)",
-                    color: ov.color,
-                    fontFamily: ov.fontFamily,
-                    textAlign: ov.align,
-                  },
-                },
-                "T",
-              );
-            }
-            const p = photosById[ov.photoId];
-            if (!p) return null;
-            return React.createElement(
-              "div",
-              {
-                key: ov.id,
-                className: "mini-ov",
-                style: {
-                  left: ov.xPct + "%",
-                  top: ov.yPct + "%",
-                  width: ov.wPct + "%",
-                  aspectRatio: String(OV_ASPECT[p.orient] || 1),
-                  transform: "translate(-50%,-50%)",
-                  borderColor: ov.frame && ov.frame.w ? ov.frame.color : "transparent",
-                },
-              },
-              React.createElement("img", { src: p.src }),
-            );
-          }),
+                  );
+                }),
+          ),
         ),
         React.createElement(
           "div",
@@ -782,8 +752,11 @@ function infoRow(k: string, v: string) {
 
 type TemplatePanelProps = {
   spread: Spread;
+  spreads: Spread[];
   active: number;
   onPick: (tid: string) => void;
+  onSelectSpread: (i: number) => void;
+  photos: Photo[];
   photosById: Record<string, Photo>;
   selectedIdx: number | null;
   selOverlay: string | null;
@@ -792,9 +765,271 @@ type TemplatePanelProps = {
   defaultPad: number;
   handlers: DesignerHandlers;
   pageSize: string;
+  meta: ProjectMeta;
 };
 
-export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx, selOverlay, allSel, setAllSel, defaultPad, handlers, pageSize }: TemplatePanelProps) {
+/** Album-level info: trim, pages, orientation breakdown. */
+function AlbumInfoSection({
+  pageSize,
+  spreadCount,
+  metaPages,
+  photos,
+}: {
+  pageSize: string;
+  spreadCount: number;
+  metaPages: number;
+  photos: Photo[];
+}) {
+  const counts = useMemo(() => {
+    let l = 0;
+    let p = 0;
+    let s = 0;
+    for (const ph of photos) {
+      if (ph.orient === "L") l++;
+      else if (ph.orient === "P") p++;
+      else s++;
+    }
+    return { l, p, s };
+  }, [photos]);
+  const usedPages = spreadCount * 2;
+  const orientText =
+    photos.length === 0
+      ? "—"
+      : [
+          `${counts.l} landscape`,
+          `${counts.p} portrait`,
+          counts.s ? `${counts.s} square` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+  return React.createElement(
+    "div",
+    { className: "album-info" },
+    React.createElement(
+      "div",
+      { className: "info-row" },
+      React.createElement("span", null, "Trim size"),
+      React.createElement("span", null, pageSize || "—"),
+    ),
+    React.createElement(
+      "div",
+      { className: "info-row" },
+      React.createElement("span", null, "Pages"),
+      React.createElement("span", null, `${usedPages} of ${metaPages || "—"}`),
+    ),
+    React.createElement(
+      "div",
+      { className: "info-row" },
+      React.createElement("span", null, "Photos imported"),
+      React.createElement("span", null, photos.length),
+    ),
+    React.createElement(
+      "div",
+      { className: "info-row" },
+      React.createElement("span", null, "Orientations"),
+      React.createElement("span", { className: "ai-orient" }, orientText),
+    ),
+  );
+}
+
+/** Live mini-thumb grid of every spread; click to focus. */
+function SpreadGridSection({
+  spreads,
+  active,
+  photosById,
+  onSelect,
+}: {
+  spreads: Spread[];
+  active: number;
+  photosById: Record<string, Photo>;
+  onSelect: (i: number) => void;
+}) {
+  return React.createElement(
+    "div",
+    { className: "spread-grid" },
+    spreads.map((sp, i) => {
+      const tpl = templates.find((t) => t.id === sp.templateId);
+      const cls = "sg-item" + (i === active ? " on" : "");
+      return React.createElement(
+        "button",
+        { key: sp.id, className: cls, onClick: () => onSelect(i), title: i === 0 ? "Cover" : `Spread ${i * 2}–${i * 2 + 1}` },
+        React.createElement(
+          "div",
+          { className: "sg-mini", style: sp.pageColor ? { background: sp.pageColor } : undefined },
+          React.createElement(
+            "div",
+            { className: "sg-mini-grid" },
+            sp.cells.map((c, ci) => {
+              const photo = c.photoId ? photosById[c.photoId] : null;
+              const tplCell = tpl?.cells[ci];
+              return React.createElement(
+                "div",
+                { key: ci, className: "c", style: tplCell ? gridPos(tplCell) : undefined },
+                photo ? React.createElement("img", { src: photo.src, alt: "" }) : null,
+              );
+            }),
+          ),
+        ),
+        React.createElement(
+          "div",
+          { className: "sg-label" },
+          i === 0 ? "Cover" : `${i * 2}–${i * 2 + 1}`,
+        ),
+      );
+    }),
+  );
+}
+
+/** Per-photo tone adjustments: brightness + contrast sliders + B&W toggle. */
+function ToneAdjustments({
+  cell,
+  onChange,
+}: {
+  cell: CellType;
+  onChange: (patch: Partial<{ brightness: number; contrast: number; bw: boolean }>) => void;
+}) {
+  const brightness = cell.brightness ?? 0;
+  const contrast = cell.contrast ?? 0;
+  const bw = !!cell.bw;
+  const dirty = brightness !== 0 || contrast !== 0 || bw;
+  const fmt = (v: number) => (v > 0 ? `+${v}` : `${v}`);
+  return React.createElement(
+    "div",
+    { className: "ctx-card tone-adjust" },
+    React.createElement(
+      "div",
+      { className: "fc-row" },
+      React.createElement("span", { className: "fc-lbl" }, "Brightness"),
+      React.createElement("input", {
+        type: "range",
+        min: -50,
+        max: 50,
+        step: 1,
+        value: brightness,
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+          onChange({ brightness: parseInt(e.target.value, 10) }),
+      }),
+      React.createElement("span", { className: "fc-val" }, fmt(brightness)),
+    ),
+    React.createElement(
+      "div",
+      { className: "fc-row" },
+      React.createElement("span", { className: "fc-lbl" }, "Contrast"),
+      React.createElement("input", {
+        type: "range",
+        min: -50,
+        max: 50,
+        step: 1,
+        value: contrast,
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+          onChange({ contrast: parseInt(e.target.value, 10) }),
+      }),
+      React.createElement("span", { className: "fc-val" }, fmt(contrast)),
+    ),
+    React.createElement(
+      "div",
+      { className: "fc-row" },
+      React.createElement("span", { className: "fc-lbl" }, "Black & White"),
+      React.createElement(
+        "button",
+        {
+          className: "seg-btn" + (bw ? " on" : ""),
+          onClick: () => onChange({ bw: !bw }),
+        },
+        bw ? "On" : "Off",
+      ),
+    ),
+    dirty
+      ? React.createElement(
+          "button",
+          {
+            className: "btn ghost wide",
+            onClick: () => onChange({ brightness: 0, contrast: 0, bw: false }),
+          },
+          React.createElement(Icon, { n: "recenter" }),
+          "Reset adjustments",
+        )
+      : null,
+  );
+}
+
+/** Image Information panel: Frame size, Effective PPI, EXIF, usage count. */
+function ImageInformationSection({
+  cellPos,
+  photo,
+  meta,
+  useCount,
+}: {
+  cellPos: GridPos;
+  photo: Photo;
+  meta: ProjectMeta;
+  useCount: number;
+}) {
+  const trim = trimSizeToMm(meta.size);
+  const size = cellPhysicalSize(cellPos, trim);
+  const havePx = !!(photo.widthPx && photo.heightPx);
+  const ppi = havePx
+    ? effectivePPI(photo.widthPx!, photo.heightPx!, size.wInches, size.hInches)
+    : 0;
+  const band = ppiBand(ppi);
+  const captured = photo.takenAt
+    ? new Date(photo.takenAt).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+  return React.createElement(
+    "div",
+    { className: "ctx-card image-info" },
+    React.createElement(
+      "div",
+      { className: "info-row" },
+      React.createElement("span", null, "Frame W × H"),
+      React.createElement(
+        "span",
+        null,
+        `${size.wInches.toFixed(2)} × ${size.hInches.toFixed(2)} in`,
+      ),
+    ),
+    havePx
+      ? React.createElement(
+          "div",
+          { className: "info-row" },
+          React.createElement("span", null, "Effective PPI"),
+          React.createElement("span", { className: `ppi-badge ${band}` }, ppi),
+        )
+      : null,
+    havePx
+      ? React.createElement(
+          "div",
+          { className: "info-row" },
+          React.createElement("span", null, "Pixel dimensions"),
+          React.createElement("span", null, `${photo.widthPx} × ${photo.heightPx} px`),
+        )
+      : null,
+    captured
+      ? React.createElement(
+          "div",
+          { className: "info-row" },
+          React.createElement("span", null, "Captured"),
+          React.createElement("span", null, captured),
+        )
+      : null,
+    React.createElement(
+      "div",
+      { className: "info-row" },
+      React.createElement("span", null, "Used"),
+      React.createElement(
+        "span",
+        null,
+        `${useCount} time${useCount === 1 ? "" : "s"} in album`,
+      ),
+    ),
+  );
+}
+
+export function TemplatePanel({ spread, spreads, active, onPick, onSelectSpread, photos, photosById, selectedIdx, selOverlay, allSel, setAllSel, defaultPad, handlers, pageSize, meta }: TemplatePanelProps) {
   const placed = spread.cells.filter((c) => c.photoId).length;
   const pageColor = spread.pageColor || "#f7f3ee";
   const padVal = spread.padding != null ? spread.padding : defaultPad;
@@ -814,7 +1049,32 @@ export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx,
       ? spread.cells[selectedIdx]
       : null;
 
+  // Count how many cells (across all spreads) reference each photo id — for
+  // the "Used N times" line in the image inspector.
+  const useCountFor = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const sp of spreads) {
+      for (const c of sp.cells) {
+        if (c.photoId) m.set(c.photoId, (m.get(c.photoId) ?? 0) + 1);
+      }
+    }
+    return m;
+  }, [spreads]);
+
   const sections: React.ReactNode[] = [
+    React.createElement(AlbumInfoSection, {
+      key: "ai",
+      pageSize,
+      spreadCount: spreads.length,
+      metaPages: meta.pages,
+      photos,
+    }),
+    React.createElement(
+      "div",
+      { className: "section-label", key: "tpl-l" },
+      React.createElement(Icon, { n: "layers" }),
+      "Templates",
+    ),
     React.createElement(
       "div",
       { className: "tpl-grid", key: "tpl" },
@@ -1111,6 +1371,9 @@ export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx,
       ),
     );
   } else if (cellSel) {
+    const tpl = templates.find((t) => t.id === spread.templateId) as Template;
+    const cellPos = tpl.cells[selectedIdx as number];
+    const photo = cellSel.photoId ? photosById[cellSel.photoId] : null;
     sections.push(
       React.createElement(
         "div",
@@ -1126,6 +1389,39 @@ export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx,
           onChange: (f: Frame) => handlers.onSetCellFrame(selectedIdx as number, f),
         }),
       ),
+      handlers.onSetCellTone
+        ? React.createElement(
+            "div",
+            { className: "section-label", key: "tn-l" },
+            React.createElement(Icon, { n: "sliders" }),
+            "Tone Adjustments",
+          )
+        : null,
+      handlers.onSetCellTone
+        ? React.createElement(ToneAdjustments, {
+            key: "tn",
+            cell: cellSel,
+            onChange: (patch: Partial<{ brightness: number; contrast: number; bw: boolean }>) =>
+              handlers.onSetCellTone!(selectedIdx as number, patch),
+          })
+        : null,
+      photo && cellPos
+        ? React.createElement(
+            "div",
+            { className: "section-label", key: "ii-l" },
+            React.createElement(Icon, { n: "image" }),
+            "Image Information",
+          )
+        : null,
+      photo && cellPos
+        ? React.createElement(ImageInformationSection, {
+            key: "ii",
+            cellPos,
+            photo,
+            meta,
+            useCount: useCountFor.get(photo.id) ?? 1,
+          })
+        : null,
     );
   } else if (!allSel) {
     sections.push(
@@ -1153,6 +1449,19 @@ export function TemplatePanel({ spread, active, onPick, photosById, selectedIdx,
       infoRow("Floating images", String((spread.overlays || []).length)),
       infoRow("Page size", pageSize || "—"),
     ),
+    React.createElement(
+      "div",
+      { className: "section-label", key: "sg-l" },
+      React.createElement(Icon, { n: "library" }),
+      `Spread Grid (${spreads.length})`,
+    ),
+    React.createElement(SpreadGridSection, {
+      key: "sg",
+      spreads,
+      active,
+      photosById,
+      onSelect: onSelectSpread,
+    }),
   );
 
   return React.createElement(

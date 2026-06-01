@@ -1,6 +1,20 @@
+import { parse as parseExif } from "exifr";
 import type { Photo } from "../data";
 import { deletePhotosForProject, savePhoto } from "../photo-store";
 import { probe } from "./helpers";
+
+async function readTakenAt(file: File): Promise<number | undefined> {
+  try {
+    const meta = (await parseExif(file, ["DateTimeOriginal", "CreateDate"])) as
+      | { DateTimeOriginal?: Date; CreateDate?: Date }
+      | undefined;
+    const d = meta?.DateTimeOriginal ?? meta?.CreateDate;
+    if (d instanceof Date && !isNaN(d.getTime())) return d.getTime();
+  } catch {
+    /* not EXIF-bearing (PNG, HEIC w/o sidecar, broken JPEG) — fine */
+  }
+  return undefined;
+}
 import {
   CURRENT_KEY,
   LEGACY_STATE_KEY,
@@ -137,7 +151,11 @@ export async function migrateLegacyStateIfNeeded(): Promise<ProjectIndexEntry | 
 async function importOne(projectId: string, file: File): Promise<Photo> {
   const src = URL.createObjectURL(file);
   const cap = file.name.replace(/\.[^.]+$/, "");
-  const photo = await probe(src, cap, { kind: "blob" });
+  const [photo, takenAt] = await Promise.all([
+    probe(src, cap, { kind: "blob" }),
+    readTakenAt(file),
+  ]);
+  if (takenAt !== undefined) photo.takenAt = takenAt;
   try {
     await savePhoto(projectId, photo, file);
   } catch {
